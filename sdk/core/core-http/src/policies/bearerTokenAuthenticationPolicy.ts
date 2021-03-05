@@ -16,17 +16,16 @@ import { AccessTokenCache, ExpiringAccessTokenCache } from "../credentials/acces
 import { AccessTokenRefresher } from "../credentials/accessTokenRefresher";
 
 /**
- * If the token is within this many milliseconds of expiring, a refresh will be
- * considered mandatory because the token is at risk of expiring before the
+ * If the token is within this many milliseconds of expiring, a refresh will
+ * be considered mandatory because the token is at risk of expiring before the
  * request is sent (this can only happen if the refresh has failed for over
  * REFRESH_WINDOW - MANDATORY_REFRESH_WINDOW millis!!).
  */
 const MANDATORY_REFRESH_WINDOW: number = 2000;
 
 /**
- * The automated token refresh will only start to happen at the
- * expiration date minus the value of timeBetweenRefreshAttemptsInMs,
- * which is by default 30 seconds.
+ * The automated token refresh will only start to happen at the expiration
+ * date minus the value of REFRESH_WINDOW, which is 30 seconds.
  */
 const REFRESH_WINDOW = 30000;
 
@@ -106,7 +105,9 @@ export class BearerTokenAuthenticationPolicy extends BaseRequestPolicy {
     // a new token.
     const token = this.tokenCache.getCachedToken() ?? (await this.refreshAndCacheToken(options));
 
-    if (this.tokenRefresher.isReady()) {
+    const timeUntilExpiry = token?.expiresOnTimestamp ?? 0 - Date.now();
+
+    if (timeUntilExpiry < REFRESH_WINDOW && !this.tokenRefresher.isRefreshing()) {
       // We do _NOT_ await this here, only queue it to refresh the token later.
       this.refreshAndCacheToken(options);
     }

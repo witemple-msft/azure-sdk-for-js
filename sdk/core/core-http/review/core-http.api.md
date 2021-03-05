@@ -28,6 +28,7 @@ export interface AccessTokenCache {
 export class AccessTokenRefresher {
     constructor(credential: TokenCredential, scopes: string | string[], requiredMillisecondsBeforeNewRefresh?: number);
     isReady(): boolean;
+    isRefreshing(): boolean;
     refresh(options: GetTokenOptions): Promise<AccessToken | undefined>;
     }
 
