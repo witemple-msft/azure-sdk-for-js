@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
-import { TokenCredential, GetTokenOptions } from "@azure/core-auth";
+import { TokenCredential, GetTokenOptions, AccessToken } from "@azure/core-auth";
 import {
   BaseRequestPolicy,
   RequestPolicy,
@@ -16,11 +16,19 @@ import { AccessTokenCache, ExpiringAccessTokenCache } from "../credentials/acces
 import { AccessTokenRefresher } from "../credentials/accessTokenRefresher";
 
 /**
+ * If the token is within this many milliseconds of expiring, a refresh will be
+ * considered mandatory because the token is at risk of expiring before the
+ * request is sent (this can only happen if the refresh has failed for over
+ * REFRESH_WINDOW - MANDATORY_REFRESH_WINDOW millis!!).
+ */
+const MANDATORY_REFRESH_WINDOW: number = 2000;
+
+/**
  * The automated token refresh will only start to happen at the
  * expiration date minus the value of timeBetweenRefreshAttemptsInMs,
  * which is by default 30 seconds.
  */
-const timeBetweenRefreshAttemptsInMs = 30000;
+const REFRESH_WINDOW = 30000;
 
 /**
  * Creates a new BearerTokenAuthenticationPolicy factory.
@@ -32,12 +40,8 @@ export function bearerTokenAuthenticationPolicy(
   credential: TokenCredential,
   scopes: string | string[]
 ): RequestPolicyFactory {
-  const tokenCache: AccessTokenCache = new ExpiringAccessTokenCache();
-  const tokenRefresher = new AccessTokenRefresher(
-    credential,
-    scopes,
-    timeBetweenRefreshAttemptsInMs
-  );
+  const tokenCache: AccessTokenCache = new ExpiringAccessTokenCache(MANDATORY_REFRESH_WINDOW);
+  const tokenRefresher = new AccessTokenRefresher(credential, scopes, REFRESH_WINDOW);
 
   return {
     create: (nextPolicy: RequestPolicy, options: RequestPolicyOptions) => {
@@ -87,14 +91,26 @@ export class BearerTokenAuthenticationPolicy extends BaseRequestPolicy {
     return this._nextPolicy.sendRequest(webResource);
   }
 
+  /**
+   * Triggers a refresh of the underlying token and inserts it into the token cache.
+   */
+  private async refreshAndCacheToken(options: GetTokenOptions): Promise<AccessToken | undefined> {
+    const token = await this.tokenRefresher.refresh(options);
+    this.tokenCache.setCachedToken(token);
+    return token;
+  }
+
   private async getToken(options: GetTokenOptions): Promise<string | undefined> {
-    // We reset the cached token some before it expires,
-    // after that point, we retry the refresh of the token only if the token refresher is ready.
-    let token = this.tokenCache.getCachedToken();
-    if (!token && this.tokenRefresher.isReady()) {
-      token = await this.tokenRefresher.refresh(options);
-      this.tokenCache.setCachedToken(token);
+    // The cached token expires just before the actual token's expiration date,
+    // so if the token cache produces undefined for any reason, we MUST wait for
+    // a new token.
+    const token = this.tokenCache.getCachedToken() ?? (await this.refreshAndCacheToken(options));
+
+    if (this.tokenRefresher.isReady()) {
+      // We do _NOT_ await this here, only queue it to refresh the token later.
+      this.refreshAndCacheToken(options);
     }
-    return token ? token.token : undefined;
+
+    return token?.token;
   }
 }
