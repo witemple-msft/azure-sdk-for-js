@@ -105,7 +105,7 @@ export class BearerTokenAuthenticationPolicy extends BaseRequestPolicy {
     // a new token.
     const token = this.tokenCache.getCachedToken() ?? (await this.refreshAndCacheToken(options));
 
-    const timeUntilExpiry = token?.expiresOnTimestamp ?? 0 - Date.now();
+    const timeUntilExpiry = (token?.expiresOnTimestamp ?? 0) - Date.now();
 
     if (timeUntilExpiry < REFRESH_WINDOW && !this.tokenRefresher.isRefreshing()) {
       // We do _NOT_ await this here, only queue it to refresh the token later.
