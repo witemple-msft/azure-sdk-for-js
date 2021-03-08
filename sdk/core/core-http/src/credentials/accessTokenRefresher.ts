@@ -28,13 +28,6 @@ export class AccessTokenRefresher {
   }
 
   /**
-   * Returns true if the refresher is currently refreshing.
-   */
-  public isRefreshing(): boolean {
-    return this.promise !== undefined;
-  }
-
-  /**
    * Stores the time in which it is called,
    * then requests a new token,
    * then sets this.promise to undefined,

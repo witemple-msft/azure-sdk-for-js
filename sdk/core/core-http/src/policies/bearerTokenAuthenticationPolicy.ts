@@ -58,6 +58,12 @@ export function bearerTokenAuthenticationPolicy(
  */
 export class BearerTokenAuthenticationPolicy extends BaseRequestPolicy {
   /**
+   * True during the interval when the refresher has been activated but has
+   * not yet resolved a new access token.
+   */
+  private isTokenRefreshing: boolean = false;
+
+  /**
    * Creates a new BearerTokenAuthenticationPolicy object.
    *
    * @param nextPolicy - The next RequestPolicy in the request pipeline.
@@ -94,8 +100,13 @@ export class BearerTokenAuthenticationPolicy extends BaseRequestPolicy {
    * Triggers a refresh of the underlying token and inserts it into the token cache.
    */
   private async refreshAndCacheToken(options: GetTokenOptions): Promise<AccessToken | undefined> {
+    this.isTokenRefreshing = true;
+
     const token = await this.tokenRefresher.refresh(options);
     this.tokenCache.setCachedToken(token);
+
+    this.isTokenRefreshing = false;
+
     return token;
   }
 
@@ -107,7 +118,7 @@ export class BearerTokenAuthenticationPolicy extends BaseRequestPolicy {
 
     const timeUntilExpiry = (token?.expiresOnTimestamp ?? 0) - Date.now();
 
-    if (timeUntilExpiry < REFRESH_WINDOW && !this.tokenRefresher.isRefreshing()) {
+    if (timeUntilExpiry < REFRESH_WINDOW && !this.isTokenRefreshing) {
       // We do _NOT_ await this here, only queue it to refresh the token later.
       this.refreshAndCacheToken(options);
     }
