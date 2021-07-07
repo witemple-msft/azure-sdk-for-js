@@ -90,11 +90,11 @@ function Set-EnvironmentVariables {
 
 function New-DeployManifest {
   Write-Verbose "Detecting samples..."
-  $javascriptSamples = (Get-ChildItem -Path "$repoRoot/sdk/$ServiceDirectory/*/samples/javascript/" -Directory
+  $javascriptSamples = (Get-ChildItem -Recurse -Path "$repoRoot/sdk/$ServiceDirectory/*/samples/" -Directory
     | Where-Object { Test-Path "$_/package.json" })
 
   $manifest = $javascriptSamples | ForEach-Object {
-    # Example: azure-sdk-for-js/sdk/appconfiguration/app-configuration/samples/javascript
+    # Example: azure-sdk-for-js/sdk/appconfiguration/app-configuration/samples/v1/javascript
     @{
       # Package name for example "app-configuration"
       Name               = ((Join-Path $_ ../../) | Get-Item).Name;

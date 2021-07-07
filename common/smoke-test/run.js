@@ -1,4 +1,31 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+
 const fs = require("fs");
+const path = require("path");
+
+const { promisify } = require("util");
+
+const readdir = promisify(fs.readdir);
+const stat = promisify(fs.stat);
+
+/**
+ * Walks a directory and its children recursively to enumerate all the descendent
+ * files of a single directory.
+ *
+ * @param {string} root the directory to enumerate the descendents of
+ * @returns {string[]} a flat array of all file descendents of the directory
+ */
+async function walk(root) {
+  const children = await readdir(root);
+
+  const descendents = children.map((name) => path.resolve(name)).map(async (name) => {
+    const stats = await stat(name);
+    return stats.isDirectory() ? walk(name) : [name];
+  });
+
+  return (await Promise.all(descendents)).reduce((cur, next) => [...cur, ...next]);
+}
 
 // Runs smoke tests from manifest
 async function main() {
@@ -22,9 +49,9 @@ async function main() {
     }
 
     const skipFiles = smokeTestConfig.skip || [];
-    const jsFiles = fs.readdirSync(entry.SamplesDirectory)
+    const jsFiles = (await walk(entry.SamplesDirectory))
       .filter((name) => name.endsWith(".js"))
-      .filter((name) => !skipFiles.includes(name));
+      .filter((name) => !skipFiles.some((entry) => name.endsWith(entry)));
 
     for (let targetSample of jsFiles) {
       const sampleModule = require(`${entry.SamplesDirectory}/${targetSample}`);
